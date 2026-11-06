@@ -1,6 +1,6 @@
 """
-Desktop Timer - Időmérő állapotgép és üzleti logika.
-UI-független, tesztelhető motor pontos (time.monotonic) időszámítással.
+Desktop Timer - Timer state machine and business logic.
+UI-independent, testable engine with drift-free (time.monotonic) timekeeping.
 """
 from __future__ import annotations
 
@@ -12,16 +12,16 @@ from storage import CsvTaskRepository
 
 
 class EngineState:
-    IDLE = "IDLE"                      # Nincs aktív mérés
-    RUNNING = "RUNNING"                # Időmérő aktívan ketyeg
-    PAUSED = "PAUSED"                  # Mérés szüneteltetve
-    PROMPT_RESUME = "PROMPT_RESUME"    # Visszatértünk az asztalra, megerősítésre vár
+    IDLE = "IDLE"                      # No active measurement
+    RUNNING = "RUNNING"                # Timer actively running
+    PAUSED = "PAUSED"                  # Timer paused
+    PROMPT_RESUME = "PROMPT_RESUME"    # Returned to desktop, awaiting confirmation
 
 
 class TimerSessionController:
     """
-    Kezeli az adott Asztalhoz tartozó időmérő állapotot, a váltásokat
-    és a CSV perzisztenciát.
+    Manages timer state, transitions, and CSV persistence
+    for a specific desktop.
     """
 
     def __init__(self, repository: CsvTaskRepository, auto_save_interval_sec: int = 30) -> None:
@@ -33,14 +33,14 @@ class TimerSessionController:
         self._last_save_monotonic: float = time.monotonic()
         self._was_on_desktop: bool = True
 
-        # Indításkor megkeressük, van-e korábban félbehagyott task
+        # Check for previously unfinished task on startup
         resumable = self.repo.get_resumable_task()
         if resumable:
             self.active_task = resumable
             self.state = EngineState.PROMPT_RESUME
 
     def start_new_task(self, task_name: str) -> TaskRecord:
-        """Új feladat indítása. Ha volt korábbi futó feladat, azt előbb lezárja."""
+        """Starts a new task. Closes any previously running task first."""
         if self.state == EngineState.RUNNING and self.active_task:
             self._flush_monotonic_delta()
             self.active_task.mark_completed()
@@ -58,7 +58,7 @@ class TimerSessionController:
         return task
 
     def resume_task(self, task_id: Optional[str] = None) -> Optional[TaskRecord]:
-        """Félbehagyott feladat folytatása."""
+        """Resumes an unfinished task."""
         target: Optional[TaskRecord] = None
         if task_id:
             tasks = self.repo.load_tasks()
@@ -80,7 +80,7 @@ class TimerSessionController:
         return self.active_task
 
     def pause_active_task(self) -> Optional[TaskRecord]:
-        """Futó feladat szüneteltetése (pl. Asztal elhagyásakor vagy gombnyomásra)."""
+        """Pauses the running task (e.g. when leaving the desktop or via button click)."""
         if self.state != EngineState.RUNNING or not self.active_task:
             return self.active_task
 
@@ -91,7 +91,7 @@ class TimerSessionController:
         return self.active_task
 
     def complete_active_task(self, final_name: Optional[str] = None) -> Optional[TaskRecord]:
-        """Feladat befejezése és lezárása."""
+        """Completes and closes the task."""
         if not self.active_task:
             return None
 
@@ -108,7 +108,7 @@ class TimerSessionController:
         return completed_task
 
     def toggle_recorded(self, task_id: str) -> Optional[TaskRecord]:
-        """Feladat rögzítettnek jelölése (pipálás)."""
+        """Toggles the recorded status of a task (check / uncheck)."""
         updated = self.repo.toggle_recorded(task_id)
         if self.active_task and self.active_task.task_id == task_id and updated:
             self.active_task.recorded = updated.recorded
@@ -116,8 +116,8 @@ class TimerSessionController:
 
     def tick(self) -> int:
         """
-        Időmérő frissítése. Rendszeresen (pl. 500-1000 ms-enként) hívandó.
-        Visszaadja az aktuális task másodperceit, és periodikusan ment.
+        Updates the timer. Called regularly (e.g. every 300-1000 ms).
+        Returns current task elapsed seconds and performs periodic auto-saving.
         """
         if self.state != EngineState.RUNNING or not self.active_task or self._last_tick_monotonic is None:
             return self.active_task.elapsed_seconds if self.active_task else 0
@@ -129,7 +129,7 @@ class TimerSessionController:
             self.active_task.update_duration(add_secs)
             self._last_tick_monotonic += add_secs
 
-            # Időszakos mentés ellenőrzése
+            # Check periodic auto-save
             if (now - self._last_save_monotonic) >= self.auto_save_interval_sec:
                 self.repo.upsert_task(self.active_task)
                 self._last_save_monotonic = now
@@ -138,18 +138,18 @@ class TimerSessionController:
 
     def handle_desktop_visibility_change(self, is_on_desktop: bool) -> tuple[bool, Optional[TaskRecord]]:
         """
-        Kezeli az Asztal-váltás eseményt.
-        Visszatérés: (kell_e_prompt_felugro, erintett_task)
+        Handles desktop switch events.
+        Returns: (prompt_needed, target_task)
         """
         prompt_needed = False
         target_task = None
 
         if self._was_on_desktop and not is_on_desktop:
-            # Felhasználó elhagyta az Asztalt -> ha futott mérés, automatikus Pause!
+            # User left the desktop -> auto-pause active timer
             if self.state == EngineState.RUNNING:
                 self.pause_active_task()
         elif not self._was_on_desktop and is_on_desktop:
-            # Felhasználó visszatért erre az Asztalra!
+            # User returned to this desktop
             if self.active_task or self.repo.get_resumable_task():
                 self.state = EngineState.PROMPT_RESUME
                 target_task = self.active_task or self.repo.get_resumable_task()
@@ -159,7 +159,7 @@ class TimerSessionController:
         return prompt_needed, target_task
 
     def _flush_monotonic_delta(self) -> None:
-        """A törtrészek és maradék másodpercek elszámolása."""
+        """Flushes fractional and remaining elapsed seconds."""
         if self._last_tick_monotonic is not None and self.active_task:
             now = time.monotonic()
             delta = now - self._last_tick_monotonic
@@ -170,13 +170,12 @@ class TimerSessionController:
             self._last_tick_monotonic = None
 
     def get_all_tasks(self) -> list[TaskRecord]:
-        """Minden rögzített feladat lekérése a listához."""
+        """Retrieves all tasks for the history panel."""
         return self.repo.load_tasks()
 
     def get_totals(self) -> tuple[int, int]:
-        """(nem_rögzített_másodpercek, összes_másodpercek) összegzése."""
+        """Calculates (unrecorded_seconds, total_seconds)."""
         tasks = self.repo.load_tasks()
         unrecorded = sum(t.elapsed_seconds for t in tasks if not t.recorded)
         total = sum(t.elapsed_seconds for t in tasks)
         return unrecorded, total
-

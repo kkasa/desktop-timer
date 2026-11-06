@@ -1,6 +1,6 @@
 """
-Desktop Timer - CSV Perzisztencia réteg.
-Asztalonként külön CSV fájl kezelése (utf-8-sig kódolással és Excel védelemmel).
+Desktop Timer - CSV Persistence layer.
+Handles per-desktop CSV file storage with utf-8-sig encoding and Excel lock protection.
 """
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ CSV_FIELDNAMES = [
 
 
 def sanitize_filename(name: str) -> str:
-    """Fájlnév tisztítása az érvénytelen Windows karakterektől."""
+    """Cleans filename from invalid Windows characters."""
     clean = re.sub(r'[\\/*?:"<>|]', "_", name.strip())
     clean = re.sub(r"\s+", "_", clean)
     return clean or "default_desktop"
@@ -38,7 +38,7 @@ def sanitize_filename(name: str) -> str:
 class CsvTaskRepository:
     def __init__(self, data_dir: Path, desktop_name: str, delimiter: str = ";") -> None:
         self.data_dir = Path(data_dir).resolve()
-        self.desktop_name = desktop_name.strip() or "Alapértelmezett Asztal"
+        self.desktop_name = desktop_name.strip() or "Default Desktop"
         self.delimiter = delimiter
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self._filename = f"{sanitize_filename(self.desktop_name)}.csv"
@@ -48,7 +48,7 @@ class CsvTaskRepository:
         self._init_storage()
 
     def _init_storage(self) -> None:
-        """Ha még nem létezik a fájl, létrehozza a fejlécet."""
+        """Initializes the CSV header if the file does not exist yet."""
         if not self.csv_path.exists():
             try:
                 with open(
@@ -66,10 +66,10 @@ class CsvTaskRepository:
                     writer.writeheader()
                 self.is_locked = False
             except Exception as e:
-                logger.warning(f"Nem sikerült inicializálni a CSV fájlt ({self.csv_path}): {e}")
+                logger.warning(f"Failed to initialize CSV file ({self.csv_path}): {e}")
 
     def load_tasks(self) -> list[TaskRecord]:
-        """Feladatok betöltése a CSV-ből."""
+        """Loads tasks from the CSV file."""
         if not self.csv_path.exists():
             self._cached_tasks = []
             return []
@@ -83,7 +83,7 @@ class CsvTaskRepository:
                 newline="",
             ) as f:
                 reader = csv.DictReader(f, delimiter=self.delimiter)
-                # Ha a fejléc mégsem a megadott elválasztóval volt írva (pl. vessző vs pontosvessző)
+                # Fallback if header delimiter differs (e.g. comma vs semicolon)
                 if reader.fieldnames and len(reader.fieldnames) == 1 and "," in reader.fieldnames[0]:
                     f.seek(0)
                     reader = csv.DictReader(f, delimiter=",")
@@ -97,16 +97,16 @@ class CsvTaskRepository:
             return tasks
         except PermissionError:
             self.is_locked = True
-            logger.warning(f"A CSV fájl zárolva van más alkalmazás által: {self.csv_path}")
+            logger.warning(f"CSV file is locked by another application: {self.csv_path}")
             return list(self._cached_tasks)
         except Exception as e:
-            logger.exception(f"Hiba a feladatok beolvasásakor ({self.csv_path}): {e}")
+            logger.exception(f"Error reading tasks ({self.csv_path}): {e}")
             return list(self._cached_tasks)
 
     def save_tasks(self, tasks: list[TaskRecord]) -> bool:
         """
-        Feladatok mentése CSV fájlba atomi helyettesítéssel (.tmp).
-        Ha a fájl zárolt (pl. Excelben van nyitva), memóriában tartja és False-t ad vissza.
+        Saves tasks to CSV file using atomic replacement (.tmp).
+        If the file is locked (e.g. open in Excel), keeps tasks in cache and returns False.
         """
         self._cached_tasks = list(tasks)
         tmp_path = self.csv_path.with_suffix(".tmp")
@@ -128,16 +128,15 @@ class CsvTaskRepository:
                 for task in tasks:
                     writer.writerow(task.to_csv_dict())
 
-            # Atomi csere
+            # Atomic swap
             os.replace(tmp_path, self.csv_path)
             self.is_locked = False
             return True
         except PermissionError:
             self.is_locked = True
             logger.warning(
-                f"Nem lehet írni a CSV fájlt, mert zárolva van (pl. Excelben van nyitva): {self.csv_path}"
+                f"Cannot write CSV file because it is locked (e.g. open in Excel): {self.csv_path}"
             )
-            # A tmp fájlt töröljük, ha maradt
             if tmp_path.exists():
                 try:
                     tmp_path.unlink()
@@ -145,7 +144,7 @@ class CsvTaskRepository:
                     pass
             return False
         except Exception as e:
-            logger.exception(f"Váratlan hiba a CSV mentése során ({self.csv_path}): {e}")
+            logger.exception(f"Unexpected error while saving CSV ({self.csv_path}): {e}")
             if tmp_path.exists():
                 try:
                     tmp_path.unlink()
@@ -154,7 +153,7 @@ class CsvTaskRepository:
             return False
 
     def upsert_task(self, task: TaskRecord) -> bool:
-        """Egyetlen feladat hozzáadása vagy meglévő frissítése."""
+        """Adds a single task or updates an existing one."""
         tasks = self.load_tasks()
         updated = False
         for idx, t in enumerate(tasks):
@@ -167,18 +166,15 @@ class CsvTaskRepository:
         return self.save_tasks(tasks)
 
     def get_resumable_task(self) -> Optional[TaskRecord]:
-        """
-        Keresi az utolsó félbehagyott (IN_PROGRESS vagy PAUSED) feladatot.
-        """
+        """Finds the most recent unfinished (IN_PROGRESS or PAUSED) task."""
         tasks = self.load_tasks()
-        # Visszafelé keresünk a legutóbbi nem lezárt taskra
         for task in reversed(tasks):
             if task.status in (TaskStatus.IN_PROGRESS, TaskStatus.PAUSED):
                 return task
         return None
 
     def toggle_recorded(self, task_id: str) -> Optional[TaskRecord]:
-        """Egy feladat rögzítettségi státuszának váltása."""
+        """Toggles the recorded status of a task."""
         tasks = self.load_tasks()
         target_task = None
         for task in tasks:
@@ -189,4 +185,3 @@ class CsvTaskRepository:
         if target_task:
             self.save_tasks(tasks)
         return target_task
-

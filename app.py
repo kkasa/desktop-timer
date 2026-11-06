@@ -1,6 +1,6 @@
 """
-Desktop Timer - Fő belépési pont (Application Entrypoint).
-Több példányban futtatható Windows 11 asztali időmérő.
+Desktop Timer - Main Application Entrypoint.
+Windows 11 virtual desktop-aware multi-instance work timer.
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from timer_engine import TimerSessionController
 from ui_widget import DesktopTimerApp
 from virtual_desktop import VirtualDesktopDetector
 
-# Windows konzol UTF-8 kompatibilitás beállítása
+# Configure Windows console UTF-8 compatibility
 if sys.platform == "win32":
     try:
         sys.stdout.reconfigure(encoding="utf-8")
@@ -27,36 +27,36 @@ if sys.platform == "win32":
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Desktop Timer – Windows 11 Virtuális Asztal-érzékeny munkaidő mérő."
+        description="Desktop Timer – Windows 11 Virtual Desktop-aware work timer."
     )
     parser.add_argument(
         "--data-dir",
         type=str,
         default=None,
-        help="A CSV adatfájlok tárolási könyvtára (alapértelmezett: ./data).",
+        help="Directory for storing CSV data files (default: ./data).",
     )
     parser.add_argument(
         "--desktop-name",
         type=str,
         default=None,
-        help="Egyedi Asztal név felülbírálás (pl. 'Projekt Alpha').",
+        help="Custom desktop name override (e.g. 'Project Alpha').",
     )
     parser.add_argument(
         "--desktop-id",
         type=str,
         default=None,
-        help="Windows Virtuális Asztal GUID azonosító felülbírálás.",
+        help="Windows Virtual Desktop GUID override.",
     )
     parser.add_argument(
         "--always-on-top",
         action="store_true",
-        help="A widget mindig felül maradjon az ablakok felett.",
+        help="Keep widget always on top of other windows.",
     )
     parser.add_argument(
         "--delimiter",
         type=str,
         default=";",
-        help="CSV oszlopelválasztó karakter (alapértelmezett: pontosvessző a magyar Excelhez).",
+        help="CSV column delimiter character (default: semicolon for Excel compatibility).",
     )
     return parser.parse_args()
 
@@ -67,7 +67,7 @@ def main() -> int:
     try:
         args = parse_args()
 
-        # Adatkönyvtár feloldása
+        # Resolve data directory
         base_dir = Path(__file__).resolve().parent
         env_data_dir = os.environ.get("DESKTOP_TIMER_DATA_DIR")
         if args.data_dir:
@@ -79,13 +79,13 @@ def main() -> int:
 
         data_dir.mkdir(parents=True, exist_ok=True)
 
-        # Virtuális Asztal detektor inicializálása
+        # Initialize Virtual Desktop detector
         detector = VirtualDesktopDetector(
             target_desktop_name=args.desktop_name,
             target_desktop_id=args.desktop_id,
         )
 
-        # CSV Adattár és Időmérő motor példányosítása
+        # Instantiate CSV repository and Timer controller
         repository = CsvTaskRepository(
             data_dir=data_dir,
             desktop_name=detector.assigned_desktop_name,
@@ -94,7 +94,7 @@ def main() -> int:
 
         controller = TimerSessionController(repository=repository)
 
-        # Tkinter UI indítása
+        # Start Tkinter UI
         root = tk.Tk()
         app = DesktopTimerApp(
             root=root,
@@ -107,15 +107,14 @@ def main() -> int:
         return 0
 
     except ConfigError as ce:
-        print(f"Konfigurációs hiba: {ce}", file=sys.stderr)
+        print(f"Configuration error: {ce}", file=sys.stderr)
         return 2
     except Exception as e:
-        logger.exception("Váratlan hiba történt a Desktop Timer futása közben.")
+        logger.exception("An unexpected error occurred while running Desktop Timer.")
         log_path = Path(__file__).resolve().parent / "error.log"
-        print(f"Hiba történt: {e} (Részletek a naplóban: {log_path})", file=sys.stderr)
+        print(f"An error occurred: {e} (Details in log: {log_path})", file=sys.stderr)
         return 1
 
 
 if __name__ == "__main__":
     sys.exit(main())
-

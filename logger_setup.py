@@ -1,6 +1,6 @@
 """
-Desktop Timer - Naplózási és konfigurációs modul.
-Rotáló fájlkezelővel és strukturált kivételekkel.
+Desktop Timer - Logging and configuration module.
+Provides rotating file logging and structured exceptions.
 """
 from __future__ import annotations
 
@@ -10,20 +10,20 @@ from pathlib import Path
 
 
 class ConfigError(Exception):
-    """Konfigurációs vagy elérési út hiba."""
+    """Configuration or file path error."""
     pass
 
 
 class StorageLockError(Exception):
-    """CSV fájl zárolási hiba (pl. nyitva van Excelben)."""
+    """CSV file lock error (e.g. open in Excel)."""
     pass
 
 
 def setup_logger(project_name: str = "desktop_timer") -> logging.Logger:
     """
-    Error log beállítása rotáló fájlkezelővel.
-    A logfájl a projekt saját mappájában jön létre (error.log),
-    1 MB méretkorláttal, 3 rotációs mentéssel és delay=True opcióval.
+    Configures error logging with a rotating file handler.
+    The log file is created in the project root directory (error.log),
+    with a 1 MB size limit, 3 backup rotations, and delay=True.
     """
     logger = logging.getLogger(project_name)
     logger.setLevel(logging.WARNING)
@@ -47,4 +47,3 @@ def setup_logger(project_name: str = "desktop_timer") -> logging.Logger:
         logger.addHandler(fh)
 
     return logger
-

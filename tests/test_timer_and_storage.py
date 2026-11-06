@@ -1,6 +1,6 @@
 """
-Desktop Timer - Részletes egységtesztek az adatmodellhez, CSV perzisztenciához
-és az időmérő állapotgéphez.
+Desktop Timer - Unit tests for data models, CSV persistence,
+and timer state machine.
 """
 from __future__ import annotations
 
@@ -24,21 +24,21 @@ def test_format_seconds():
 
 
 def test_sanitize_filename():
-    assert sanitize_filename("Projekt: Alpha / Teszt * ?") == "Projekt__Alpha___Teszt____"
-    assert sanitize_filename("Asztal 1") == "Asztal_1"
+    assert sanitize_filename("Project: Alpha / Test * ?") == "Project__Alpha___Test____"
+    assert sanitize_filename("Desktop 1") == "Desktop_1"
     assert sanitize_filename("   ") == "default_desktop"
 
 
 def test_task_record_lifecycle():
     task = TaskRecord.create_new(
-        desktop_name="Kontrolling",
-        task_name="Havi riport készítés",
+        desktop_name="Controlling",
+        task_name="Monthly report preparation",
     )
     assert task.status == TaskStatus.IN_PROGRESS
     assert task.recorded is False
     assert task.elapsed_seconds == 0
     assert task.formatted_duration == "00:00:00"
-    assert task.task_name == "Havi riport készítés"
+    assert task.task_name == "Monthly report preparation"
 
     task.update_duration(125)
     assert task.elapsed_seconds == 125
@@ -48,12 +48,13 @@ def test_task_record_lifecycle():
     assert toggled is True
     assert task.recorded is True
 
-    task.mark_completed(final_name="Havi riport készítés - Végleges")
+    task.mark_completed(final_name="Monthly report preparation - Final")
     assert task.status == TaskStatus.COMPLETED
-    assert task.task_name == "Havi riport készítés - Végleges"
+    assert task.task_name == "Monthly report preparation - Final"
 
 
-def test_csv_storage_roundtrip_hungarian_characters(temp_data_dir: Path):
+def test_csv_storage_roundtrip_accented_characters(temp_data_dir: Path):
+    """Verifies that international and accented characters are preserved correctly with UTF-8."""
     repo = CsvTaskRepository(
         data_dir=temp_data_dir,
         desktop_name="Pénzügy és Könyvelés",
@@ -71,7 +72,7 @@ def test_csv_storage_roundtrip_hungarian_characters(temp_data_dir: Path):
     assert saved is True
     assert repo.is_locked is False
 
-    # Új repo példány beolvasása ugyanabból a fájlból
+    # Load from a new repository instance pointing to the same file
     loaded_repo = CsvTaskRepository(
         data_dir=temp_data_dir,
         desktop_name="Pénzügy és Könyvelés",
@@ -95,19 +96,19 @@ def test_csv_storage_locked_excel_simulation(temp_data_dir: Path):
         data_dir=temp_data_dir,
         desktop_name="LockTest",
     )
-    task = TaskRecord.create_new("LockTest", "Teszt task")
+    task = TaskRecord.create_new("LockTest", "Test task")
     repo.save_tasks([task])
 
-    # Szimuláljuk, hogy os.replace PermissionError-t dob (pl. Excel zárolta)
-    with patch("os.replace", side_effect=PermissionError("Fájl zárolva")):
+    # Simulate os.replace raising PermissionError (e.g. file locked by Excel)
+    with patch("os.replace", side_effect=PermissionError("File locked")):
         success = repo.save_tasks([task])
         assert success is False
         assert repo.is_locked is True
 
-        # Memóriából betöltve továbbra is elérhető a cache
+        # In-memory cached tasks remain accessible
         cached = repo.load_tasks()
         assert len(cached) == 1
-        assert cached[0].task_name == "Teszt task"
+        assert cached[0].task_name == "Test task"
 
 
 def test_timer_session_controller_workflow(temp_data_dir: Path):
@@ -117,13 +118,13 @@ def test_timer_session_controller_workflow(temp_data_dir: Path):
     assert controller.state == EngineState.IDLE
     assert controller.active_task is None
 
-    # Új task indítása
-    task = controller.start_new_task("Backend refaktorálás")
+    # Start new task
+    task = controller.start_new_task("Backend refactoring")
     assert controller.state == EngineState.RUNNING
     assert controller.active_task is not None
-    assert controller.active_task.task_name == "Backend refaktorálás"
+    assert controller.active_task.task_name == "Backend refactoring"
 
-    # Idő telésének szimulációja
+    # Simulate time passing
     with patch("time.monotonic") as mock_mono:
         mock_mono.return_value = controller._last_tick_monotonic + 5.0
         elapsed = controller.tick()
@@ -131,52 +132,51 @@ def test_timer_session_controller_workflow(temp_data_dir: Path):
         assert controller.active_task.elapsed_seconds == 5
         assert controller.active_task.formatted_duration == "00:00:05"
 
-    # Szüneteltetés
+    # Pause
     controller.pause_active_task()
     assert controller.state == EngineState.PAUSED
     assert controller.active_task.status == TaskStatus.PAUSED
 
-    # Folytatás
+    # Resume
     controller.resume_task()
     assert controller.state == EngineState.RUNNING
     assert controller.active_task.status == TaskStatus.IN_PROGRESS
 
-    # Befejezés
-    completed = controller.complete_active_task(final_name="Backend refaktorálás KÉSZ")
+    # Complete
+    completed = controller.complete_active_task(final_name="Backend refactoring DONE")
     assert controller.state == EngineState.IDLE
     assert controller.active_task is None
     assert completed.status == TaskStatus.COMPLETED
-    assert completed.task_name == "Backend refaktorálás KÉSZ"
+    assert completed.task_name == "Backend refactoring DONE"
 
-    # Perzisztencia ellenőrzése
+    # Verify persistence
     tasks_in_repo = repo.load_tasks()
     assert len(tasks_in_repo) == 1
     assert tasks_in_repo[0].status == TaskStatus.COMPLETED
 
 
 def test_desktop_switch_auto_pause_and_resume_prompt(temp_data_dir: Path):
-    repo = CsvTaskRepository(data_dir=temp_data_dir, desktop_name="Projekt A")
+    repo = CsvTaskRepository(data_dir=temp_data_dir, desktop_name="Project A")
     controller = TimerSessionController(repository=repo)
 
-    # 1. Elindítunk egy feladatot az Asztalon
-    controller.start_new_task("Elemzés és tervezés")
+    # 1. Start task on desktop
+    controller.start_new_task("Analysis and planning")
     assert controller.state == EngineState.RUNNING
 
-    # 2. Átváltunk egy másik Asztalra (is_on_desktop=False)
+    # 2. Switch to another desktop (is_on_desktop=False) -> auto-paused
     prompt_needed, _ = controller.handle_desktop_visibility_change(is_on_desktop=False)
     assert prompt_needed is False
-    # Automatikusan Pause állapotba váltott!
     assert controller.state == EngineState.PAUSED
     assert controller.active_task.status == TaskStatus.PAUSED
 
-    # 3. Visszatérünk az Asztalra (is_on_desktop=True)
+    # 3. Return to desktop (is_on_desktop=True) -> prompt offered
     prompt_needed, target = controller.handle_desktop_visibility_change(is_on_desktop=True)
     assert prompt_needed is True
     assert target is not None
-    assert target.task_name == "Elemzés és tervezés"
+    assert target.task_name == "Analysis and planning"
     assert controller.state == EngineState.PROMPT_RESUME
 
-    # 4. Felhasználó rányom a Folytatásra
+    # 4. User clicks Resume
     resumed = controller.resume_task()
     assert controller.state == EngineState.RUNNING
     assert resumed.status == TaskStatus.IN_PROGRESS
@@ -198,7 +198,7 @@ def test_toggle_recorded_and_totals(temp_data_dir: Path):
     assert unrecorded == 300
     assert total == 300
 
-    # Pipáljuk a Task 1-et
+    # Toggle recorded on Task 1
     controller.toggle_recorded(t1.task_id)
 
     unrecorded_after, total_after = controller.get_totals()
@@ -216,7 +216,7 @@ def test_ui_task_entry_editing_not_overwritten(temp_data_dir: Path):
     try:
         repo = CsvTaskRepository(data_dir=temp_data_dir, desktop_name="UITest")
         controller = TimerSessionController(repository=repo)
-        controller.start_new_task("Eredeti feladat")
+        controller.start_new_task("Original task")
 
         detector = MagicMock()
         detector.assigned_desktop_name = "UITest"
@@ -224,24 +224,23 @@ def test_ui_task_entry_editing_not_overwritten(temp_data_dir: Path):
 
         app = DesktopTimerApp(root=root, detector=detector, controller=controller)
 
-        # Kezdetben meg kell jelennie az aktív task nevének
-        assert app.task_var.get() == "Eredeti feladat"
+        # Initially active task name should appear
+        assert app.task_var.get() == "Original task"
 
-        # Felhasználó gépel a mezőben
-        app.task_var.set("Módosított feladat név")
+        # User types in entry field
+        app.task_var.set("Modified task name")
         app._on_task_entry_key()
 
-        # Szimulálunk egy időzítő tick / UI refresh ciklust (akár fut, akár szünetel)
+        # Simulate timer tick / UI refresh cycle (running or paused)
         app._refresh_ui_state()
 
-        # Nem írhatja vissza a régi nevet!
-        assert app.task_var.get() == "Módosított feladat név"
-        assert controller.active_task.task_name == "Módosított feladat név"
+        # Must not overwrite user input in progress
+        assert app.task_var.get() == "Modified task name"
+        assert controller.active_task.task_name == "Modified task name"
 
-        # Enter vagy FocusOut szimulálása -> mentés a tárolóba
+        # Simulate Enter or FocusOut -> save to storage
         app._on_task_name_changed()
         loaded = repo.load_tasks()
-        assert loaded[0].task_name == "Módosított feladat név"
+        assert loaded[0].task_name == "Modified task name"
     finally:
         root.destroy()
-

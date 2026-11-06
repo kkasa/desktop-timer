@@ -11,8 +11,7 @@ if exist "venv\Scripts\pythonw.exe" (
 )
 
 if errorlevel 1 (
-    echo [HIBA] Nem sikerült a háttérben indítani, konzolban futtatás:
+    echo [ERROR] Failed to start in background, running in console:
     python app.py %*
     pause
 )
-

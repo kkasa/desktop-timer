@@ -1,67 +1,66 @@
 # Desktop Timer ⏱️
 
-Windows 11 Virtuális Asztal-érzékeny (Virtual Desktop-aware), minimalista lebegő munkaidő mérő alkalmazás.
+Windows 11 Virtual Desktop-aware minimalist floating work timer application.
 
-Kifejezetten olyan munkafolyamatokhoz tervezve, ahol a felhasználó különböző Windows 11 Virtuális Asztalokat dedikál különböző projekteknek. Az alkalmazás képes külön példányokban futni az Asztalokon, és pontosan azt az **emberi munkaidőt** méri, amit ténylegesen az adott Asztalon töltesz.
-
----
-
-## Fő Jellemzők
-
-1. **Automatikus Windows 11 Virtuális Asztal felismerés:**
-   - Indításkor automatikusan kiolvassa a Windows 11 Explorer registryjéből (`HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VirtualDesktops`) az adott Asztal nevét (pl. `Kontrolling`, `BA workshop`, `Adománytaxi`) és egyedi GUID azonosítóját.
-   - Ha az asztalnak nincs egyedi neve a Windowsban, `Asztal 1`, `Asztal 2` sorszámozást használ.
-2. **Asztalváltásra reagálás:**
-   - **Elhagyáskor:** Ha átváltasz egy másik Asztalra (miközben itt pl. egy AI ágens vagy háttérfolyamat dolgozik), az aktív időmérést **automatikusan szünetelteti (Pause)** és menti a CSV-be.
-   - **Visszatéréskor:** Amikor visszatérsz az Asztalra, a kis widget **automatikusan előtérbe ugrik**, és felajánlja a megkezdett feladat folytatását (*„Folytatod a(z) '...' taskot?”*), de az óra **kizárólag gombnyomásra** indul el.
-3. **Asztalonként külön CSV perzisztencia:**
-   - Az adatokat különálló fájlokban tárolja a `data/<Asztal_Neve>.csv` útvonalon.
-   - **Magyar Excel kompatibilis:** `utf-8-sig` kódolás pontosvessző (`;`) elválasztóval, így dupla kattintással közvetlenül nyitható Excelben az ékezetes karakterek és oszlopok hibátlan megjelenésével.
-   - **Zárolási védelem:** Ha a CSV éppen nyitva van Excelben, az alkalmazás nem omlik össze, memóriában tartja a frissítéseket, és jelzi a widgeten a zárolást.
-4. **Minimalista lebegő widget + Lenyitható előzmények:**
-   - Kompakt widget (~440 × 215 px): nagyméretű, tiszta kontrasztos digitális óra (`Consolas 28 bold`), valós időben szerkeszthető feladatnév mező, Indítás / Szünet / Befejezés / Új gombok, `[📌 Felül / 📍 Normál]` Mindig felül állapotjelző kapcsoló.
-   - `[📋 Feladatok]` gombbal lenyitható előzménypanel (~440 × 520 px): korábbi feladatok listája, `[☐ / ☑]` rögzítettnek jelölés (pipálás), nem rögzített és összesített munkaidő kijelzése, valamint `[📂 CSV megnyitása]` közvetlen elérés.
+Designed specifically for workflows where different Windows 11 Virtual Desktops are dedicated to separate projects. The application runs in separate instances across desktops, accurately measuring only the **actual active work time** spent on that specific desktop.
 
 ---
 
-## Indítás
+## Key Features
 
-### Egyszerű dupla kattintás:
-Futtasd a `run.bat` fájlt. Ez a háttérben indítja el a widgetet (`pythonw.exe` segítségével), konzolablak nélkül.
+1. **Automatic Windows 11 Virtual Desktop Detection:**
+   - On startup, automatically reads the virtual desktop name (e.g., `Controlling`, `BA Workshop`, `Project Alpha`) and GUID from the Windows 11 Explorer registry (`HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VirtualDesktops`).
+   - If no custom name was assigned in Windows, it falls back to sequential naming (`Desktop 1`, `Desktop 2`, etc.).
+2. **Responsive to Desktop Switching:**
+   - **When leaving:** Switching away to another desktop (while background processes or AI agents work here) **automatically pauses** the active timer and saves progress to CSV.
+   - **When returning:** Returning to the desktop **automatically brings the widget to the foreground** and displays a prompt offering to resume (*"Resume: '...'?"*). The timer resumes **strictly upon user click**.
+3. **Per-Desktop CSV Persistence:**
+   - Stores records in isolated files at `data/<Desktop_Name>.csv`.
+   - **Excel Compatible:** Formatted in `utf-8-sig` encoding with semicolon (`;`) delimiter for direct double-click opening in Excel without character encoding issues or corrupted columns.
+   - **File Lock Protection:** If the CSV is locked open in Excel, the app does not crash; it preserves updates in memory and displays a lock warning badge on the widget.
+4. **Minimalist Floating Widget + Expandable History:**
+   - Compact widget (~440 × 215 px): prominent high-contrast digital clock (`Consolas 28 bold`), real-time editable task name input, Start / Pause / Complete / New buttons, and `[📌 On Top / 📍 Normal]` toggle.
+   - Expandable history panel (~440 × 520 px) via `[📋 Tasks]`: task history with `[☐ / ☑]` recorded checkmarks, unrecorded and total elapsed time summary, and quick `[📂 Open CSV]` access.
 
-### Parancssori kapcsolók:
+---
+
+## Getting Started
+
+### Double-Click Launch:
+Run `run.bat`. This starts the widget in the background via `pythonw.exe` without a terminal window.
+
+### Command-Line Options:
 ```powershell
-# Alapértelmezett indítás az aktuális Asztalon
+# Default launch on current desktop
 python app.py
 
-# Mindig felül (Always on Top) módban
+# Launch in Always-on-Top mode
 python app.py --always-on-top
 
-# Egyedi Asztal név felülbírálásával
-python app.py --desktop-name "Projekt Alpha"
+# Override desktop name
+python app.py --desktop-name "Project Alpha"
 
-# Egyedi adatkönyvtár megadásával
-python app.py --data-dir "c:\SajatMappa\Adatok"
+# Custom data directory
+python app.py --data-dir "C:\MyData\TimerRecords"
 ```
 
 ---
 
-## Architektúra és Fájlok
+## Architecture and Files
 
-- `app.py`: Belépési pont, CLI paraméterek (`argparse`), hibakezelés.
-- `virtual_desktop.py`: Natív Windows 11 Registry olvasó és COM `IVirtualDesktopManager` integráció (`ctypes`).
-- `models.py`: `TaskRecord` adatmodell, időtartam formázás (`format_seconds`), státuszok.
-- `storage.py`: `CsvTaskRepository`, atomi írás (`.tmp` -> `.csv`), Excel zárolás kezelés.
-- `timer_engine.py`: Állapotgép (`TimerSessionController`) driftmentes `time.monotonic()` időméréssel és auto-pause/prompt logikával.
-- `ui_widget.py`: Tkinter minimalista lebegő felület és lenyitható történet panel.
-- `logger_setup.py`: Rotáló hibaplózás (`error.log`, max 1 MB, 3 mentés, `delay=True`).
-- `tests/`: Pytest egységtesztek.
+- `app.py`: Application entry point, CLI arguments (`argparse`), error handling.
+- `virtual_desktop.py`: Native Windows 11 Registry reader and COM `IVirtualDesktopManager` integration (`ctypes`).
+- `models.py`: `TaskRecord` data model, duration formatting (`format_seconds`), task statuses.
+- `storage.py`: `CsvTaskRepository`, atomic file writes (`.tmp` -> `.csv`), Excel lock handling.
+- `timer_engine.py`: State machine (`TimerSessionController`) with drift-free `time.monotonic()` timekeeping and auto-pause/prompt logic.
+- `ui_widget.py`: Minimalist floating Tkinter UI and expandable history panel.
+- `logger_setup.py`: Rotating error logger (`error.log`, max 1 MB, 3 backups, `delay=True`).
+- `tests/`: Pytest unit tests.
 
 ---
 
-## Tesztek Futtatása
+## Running Tests
 
 ```powershell
 pytest tests -v
 ```
-
