@@ -206,10 +206,10 @@ def test_toggle_recorded_and_totals(temp_data_dir: Path):
     assert total_after == 300
 
 
-def test_ui_task_entry_editing_not_overwritten(temp_data_dir: Path):
+def test_ui_task_entry_editing_and_dynamic_background(temp_data_dir: Path):
     import tkinter as tk
     from unittest.mock import MagicMock
-    from ui_widget import DesktopTimerApp
+    from ui_widget import COLOR_BG, COLOR_BG_PAUSED, DesktopTimerApp
 
     root = tk.Tk()
     root.withdraw()
@@ -224,19 +224,30 @@ def test_ui_task_entry_editing_not_overwritten(temp_data_dir: Path):
 
         app = DesktopTimerApp(root=root, detector=detector, controller=controller)
 
-        # Initially active task name should appear
+        # Initially active task name should appear and background is dark (RUNNING)
         assert app.task_var.get() == "Original task"
+        assert app._current_bg == COLOR_BG
+        assert app.main_container.cget("bg") == COLOR_BG
 
         # User types in entry field
         app.task_var.set("Modified task name")
         app._on_task_entry_key()
 
-        # Simulate timer tick / UI refresh cycle (running or paused)
+        # Pause task -> background switches to medium gray (Resume active)
+        controller.pause_active_task()
         app._refresh_ui_state()
 
-        # Must not overwrite user input in progress
+        # Must not overwrite user input in progress while paused
         assert app.task_var.get() == "Modified task name"
         assert controller.active_task.task_name == "Modified task name"
+        assert app._current_bg == COLOR_BG_PAUSED
+        assert app.main_container.cget("bg") == COLOR_BG_PAUSED
+
+        # Resume task -> background returns to dark
+        controller.resume_task()
+        app._refresh_ui_state()
+        assert app._current_bg == COLOR_BG
+        assert app.main_container.cget("bg") == COLOR_BG
 
         # Simulate Enter or FocusOut -> save to storage
         app._on_task_name_changed()
@@ -244,3 +255,5 @@ def test_ui_task_entry_editing_not_overwritten(temp_data_dir: Path):
         assert loaded[0].task_name == "Modified task name"
     finally:
         root.destroy()
+
+

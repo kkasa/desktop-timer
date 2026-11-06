@@ -20,6 +20,7 @@ Designed specifically for workflows where different Windows 11 Virtual Desktops 
    - **File Lock Protection:** If the CSV is locked open in Excel, the app does not crash; it preserves updates in memory and displays a lock warning badge on the widget.
 4. **Minimalist Floating Widget + Expandable History:**
    - Compact widget (~440 × 215 px): prominent high-contrast digital clock (`Consolas 28 bold`), real-time editable task name input, Start / Pause / Complete / New buttons, and `[📌 On Top / 📍 Normal]` toggle.
+   - **Dynamic State Indication:** The widget automatically switches its background to medium gray (`#545c6e`) while paused (when the Resume button is active), providing instant visual differentiation from the deep dark running background while maintaining crisp legibility for white text.
    - Expandable history panel (~440 × 520 px) via `[📋 Tasks]`: task history with `[☐ / ☑]` recorded checkmarks, unrecorded and total elapsed time summary, and quick `[📂 Open CSV]` access.
 
 ---

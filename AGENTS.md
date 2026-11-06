@@ -27,8 +27,12 @@ This document summarizes the architecture, technical conventions, and maintenanc
 | `models.py` | Data models and formatting | `TaskRecord`, `TaskStatus`, `format_seconds()`, `generate_task_id()` |
 | `storage.py` | Per-desktop CSV persistence | `CsvTaskRepository`, `save_tasks()`, `load_tasks()`, `sanitize_filename()` |
 | `timer_engine.py` | Pure state machine & business logic | `TimerSessionController`, `EngineState`, `tick()`, `handle_desktop_visibility_change()` |
-| `ui_widget.py` | Tkinter floating widget & history panel | `DesktopTimerApp`, `_poll_tick()`, `_render_task_list()`, `_adjust_window_size()`, `_on_task_entry_key()`, `_on_task_name_changed()` |
+| `ui_widget.py` | Tkinter floating widget & history panel | `DesktopTimerApp`, `_poll_tick()`, `_apply_background_color()`, `_render_task_list()`, `_adjust_window_size()`, `_on_task_entry_key()`, `_on_task_name_changed()` |
 | `logger_setup.py` | Logging and structured exceptions | `setup_logger()`, `ConfigError`, `StorageLockError` |
+
+- **UI Visual State Conventions:**
+  - Active / Running / Idle background: Deep dark (`#121417`, `COLOR_BG`).
+  - Paused / Resume-active background: Medium gray (`#545c6e`, `COLOR_BG_PAUSED`), maintaining high-contrast visibility for white text while clearly differentiating paused from running state.
 
 ---
 

@@ -19,7 +19,8 @@ from virtual_desktop import VirtualDesktopDetector
 logger = setup_logger("desktop_timer.ui")
 
 # Modern dark color palette – high contrast and enhanced legibility
-COLOR_BG = "#121417"               # Deep dark background
+COLOR_BG = "#121417"               # Deep dark background (running / active)
+COLOR_BG_PAUSED = "#545c6e"        # Medium gray background (paused / resume active)
 COLOR_SURFACE = "#22262e"          # Cards, panels, and buttons
 COLOR_SURFACE_HOVER = "#2f3540"    # Hover state
 COLOR_ENTRY_BG = "#191c22"         # Input field background
@@ -51,6 +52,8 @@ class DesktopTimerApp:
         self.is_expanded: bool = False
         self._top_hwnd: Optional[int] = None
         self._current_task_id: Optional[str] = None
+        self._current_bg: str = COLOR_BG
+        self._bg_widgets: list[tk.Widget] = []
 
         self._setup_window()
         self._build_ui()
@@ -349,6 +352,36 @@ class DesktopTimerApp:
         )
         self.btn_open_csv.pack(side=tk.RIGHT)
 
+        # Register all background frames and transparent labels for dynamic theme switching
+        self._bg_widgets = [
+            self.root,
+            self.main_container,
+            self.header_frame,
+            self.lbl_desktop,
+            self.timer_frame,
+            self.lbl_clock,
+            self.lbl_lock_warning,
+            self.task_entry_frame,
+            self.controls_frame,
+            self.history_frame,
+            self.list_container,
+            self.canvas,
+            self.task_list_frame,
+            self.footer_frame,
+            self.lbl_totals,
+        ]
+
+    def _apply_background_color(self, target_bg: str) -> None:
+        """Applies dynamic background color (dark while running/idle, medium gray while paused)."""
+        if self._current_bg == target_bg:
+            return
+        self._current_bg = target_bg
+        for widget in getattr(self, "_bg_widgets", []):
+            try:
+                widget.configure(bg=target_bg)
+            except Exception:
+                pass
+
     def _toggle_always_on_top(self) -> None:
         """Toggles Always on Top window state."""
         self.always_on_top = not self.always_on_top
@@ -391,7 +424,7 @@ class DesktopTimerApp:
             lbl_empty = tk.Label(
                 self.task_list_frame,
                 text="No recorded tasks on this desktop yet.",
-                bg=COLOR_BG,
+                bg=self._current_bg,
                 fg=COLOR_MUTED,
                 font=("Segoe UI", 9, "italic"),
                 pady=14,
@@ -577,6 +610,11 @@ class DesktopTimerApp:
             self.lbl_lock_warning.pack(side=tk.RIGHT)
         else:
             self.lbl_lock_warning.pack_forget()
+
+        # Dynamic background color: medium gray when paused / resume is active, dark when running or idle
+        is_paused = (state in (EngineState.PAUSED, EngineState.PROMPT_RESUME))
+        target_bg = COLOR_BG_PAUSED if is_paused else COLOR_BG
+        self._apply_background_color(target_bg)
 
         self._update_tasks_button_badge()
 
