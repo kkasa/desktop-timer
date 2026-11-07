@@ -114,9 +114,22 @@ class TimerSessionController:
             self.active_task.recorded = updated.recorded
         return updated
 
+    def adjust_active_task_duration(self, delta_seconds: int) -> Optional[TaskRecord]:
+        """Adjusts active task elapsed seconds by delta_seconds (minimum 0) and persists immediately."""
+        if not self.active_task or self.state == EngineState.IDLE:
+            return None
+
+        if self.state == EngineState.RUNNING:
+            self._flush_monotonic_delta()
+            self._last_tick_monotonic = time.monotonic()
+
+        self.active_task.update_duration(delta_seconds)
+        self.repo.upsert_task(self.active_task)
+        return self.active_task
+
     def tick(self) -> int:
         """
-        Updates the timer. Called regularly (e.g. every 300-1000 ms).
+        Updates the timer. Called regularly (e.g. every 900 ms).
         Returns current task elapsed seconds and performs periodic auto-saving.
         """
         if self.state != EngineState.RUNNING or not self.active_task or self._last_tick_monotonic is None:

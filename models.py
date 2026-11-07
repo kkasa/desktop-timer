@@ -66,8 +66,8 @@ class TaskRecord:
         )
 
     def update_duration(self, additional_seconds: int) -> None:
-        """Increments elapsed time and updates formatted duration."""
-        self.elapsed_seconds += additional_seconds
+        """Increments or decrements elapsed time (minimum 0) and updates formatted duration."""
+        self.elapsed_seconds = max(0, self.elapsed_seconds + additional_seconds)
         self.formatted_duration = format_seconds(self.elapsed_seconds)
         self.updated_at = now_timestamp()
 

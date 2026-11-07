@@ -44,6 +44,16 @@ def test_task_record_lifecycle():
     assert task.elapsed_seconds == 125
     assert task.formatted_duration == "00:02:05"
 
+    # Decrement by 60 seconds
+    task.update_duration(-60)
+    assert task.elapsed_seconds == 65
+    assert task.formatted_duration == "00:01:05"
+
+    # Decrement below zero is bounded to 0
+    task.update_duration(-200)
+    assert task.elapsed_seconds == 0
+    assert task.formatted_duration == "00:00:00"
+
     toggled = task.toggle_recorded()
     assert toggled is True
     assert task.recorded is True
@@ -206,6 +216,47 @@ def test_toggle_recorded_and_totals(temp_data_dir: Path):
     assert total_after == 300
 
 
+def test_adjust_active_task_duration(temp_data_dir: Path):
+    repo = CsvTaskRepository(data_dir=temp_data_dir, desktop_name="AdjustTest")
+    controller = TimerSessionController(repository=repo)
+
+    # In IDLE, adjustment does nothing and returns None
+    assert controller.adjust_active_task_duration(60) is None
+
+    # Start task (elapsed = 0)
+    task = controller.start_new_task("Adjustable Task")
+    assert task.elapsed_seconds == 0
+
+    # Decrement when at 0 cannot go below 0
+    controller.adjust_active_task_duration(-60)
+    assert task.elapsed_seconds == 0
+    assert task.formatted_duration == "00:00:00"
+
+    # Add 1 minute (+60s)
+    controller.adjust_active_task_duration(60)
+    assert task.elapsed_seconds == 60
+    assert task.formatted_duration == "00:01:00"
+
+    # Add another minute while RUNNING
+    controller.adjust_active_task_duration(60)
+    assert task.elapsed_seconds == 120
+    assert task.formatted_duration == "00:02:00"
+
+    # Pause task
+    controller.pause_active_task()
+    assert controller.state == EngineState.PAUSED
+
+    # Subtract 1 minute while PAUSED
+    controller.adjust_active_task_duration(-60)
+    assert task.elapsed_seconds == 60
+    assert task.formatted_duration == "00:01:00"
+
+    # Check persistence in CSV
+    saved_task = repo.load_tasks()[0]
+    assert saved_task.elapsed_seconds == 60
+    assert saved_task.formatted_duration == "00:01:00"
+
+
 def test_ui_task_entry_editing_and_dynamic_background(temp_data_dir: Path):
     import tkinter as tk
     from unittest.mock import MagicMock
@@ -228,6 +279,14 @@ def test_ui_task_entry_editing_and_dynamic_background(temp_data_dir: Path):
         assert app.task_var.get() == "Original task"
         assert app._current_bg == COLOR_BG
         assert app.main_container.cget("bg") == COLOR_BG
+        assert str(app.btn_plus_min["state"]) == "normal"
+        assert str(app.btn_minus_min["state"]) == "normal"
+
+        # Test +1m button click while RUNNING
+        prev_seconds = controller.active_task.elapsed_seconds
+        app.btn_plus_min.invoke()
+        assert controller.active_task.elapsed_seconds == prev_seconds + 60
+        assert app.lbl_clock.cget("text") == controller.active_task.formatted_duration
 
         # User types in entry field
         app.task_var.set("Modified task name")
@@ -242,6 +301,14 @@ def test_ui_task_entry_editing_and_dynamic_background(temp_data_dir: Path):
         assert controller.active_task.task_name == "Modified task name"
         assert app._current_bg == COLOR_BG_PAUSED
         assert app.main_container.cget("bg") == COLOR_BG_PAUSED
+        assert str(app.btn_plus_min["state"]) == "normal"
+        assert str(app.btn_minus_min["state"]) == "normal"
+
+        # Test -1m button click while PAUSED
+        curr_seconds = controller.active_task.elapsed_seconds
+        app.btn_minus_min.invoke()
+        assert controller.active_task.elapsed_seconds == max(0, curr_seconds - 60)
+        assert app.lbl_clock.cget("text") == controller.active_task.formatted_duration
 
         # Resume task -> background returns to dark
         controller.resume_task()

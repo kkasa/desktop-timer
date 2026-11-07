@@ -36,6 +36,8 @@ COLOR_BORDER = "#3b4252"           # Subtle, visible borders
 COLOR_BANNER_BG = "#1e293b"        # Resume banner background
 COLOR_BANNER_TEXT = "#f8fafc"      # Resume banner text
 
+POLL_INTERVAL_MS = 900             # Background polling frequency (virtual desktop & clock tick)
+
 
 class DesktopTimerApp:
     def __init__(
@@ -59,8 +61,8 @@ class DesktopTimerApp:
         self._build_ui()
         self._refresh_ui_state()
 
-        # Start background polling loop (300 ms tick)
-        self.root.after(300, self._poll_tick)
+        # Start background polling loop (900 ms tick)
+        self.root.after(POLL_INTERVAL_MS, self._poll_tick)
 
     def _setup_window(self) -> None:
         """Initial window sizing and style configuration."""
@@ -194,6 +196,38 @@ class DesktopTimerApp:
         )
         self.lbl_clock.pack(side=tk.LEFT)
 
+        # Quick +/- 1 minute adjustment buttons
+        self.adjust_frame = tk.Frame(self.timer_frame, bg=COLOR_BG)
+        self.adjust_frame.pack(side=tk.LEFT, padx=(8, 0))
+
+        self.btn_minus_min = tk.Button(
+            self.adjust_frame,
+            text="-1m",
+            bg=COLOR_SURFACE,
+            fg=COLOR_TEXT,
+            activebackground=COLOR_SURFACE_HOVER,
+            relief=tk.FLAT,
+            font=("Segoe UI", 9, "bold"),
+            padx=5,
+            pady=1,
+            command=lambda: self._on_click_adjust_time(-60),
+        )
+        self.btn_minus_min.pack(side=tk.LEFT, padx=(0, 3))
+
+        self.btn_plus_min = tk.Button(
+            self.adjust_frame,
+            text="+1m",
+            bg=COLOR_SURFACE,
+            fg=COLOR_TEXT,
+            activebackground=COLOR_SURFACE_HOVER,
+            relief=tk.FLAT,
+            font=("Segoe UI", 9, "bold"),
+            padx=5,
+            pady=1,
+            command=lambda: self._on_click_adjust_time(60),
+        )
+        self.btn_plus_min.pack(side=tk.LEFT)
+
         self.lbl_status = tk.Label(
             self.timer_frame,
             text="○ READY",
@@ -203,7 +237,7 @@ class DesktopTimerApp:
             padx=8,
             pady=3,
         )
-        self.lbl_status.pack(side=tk.LEFT, padx=(12, 0))
+        self.lbl_status.pack(side=tk.LEFT, padx=(10, 0))
 
         self.lbl_lock_warning = tk.Label(
             self.timer_frame,
@@ -360,6 +394,7 @@ class DesktopTimerApp:
             self.lbl_desktop,
             self.timer_frame,
             self.lbl_clock,
+            self.adjust_frame,
             self.lbl_lock_warning,
             self.task_entry_frame,
             self.controls_frame,
@@ -611,6 +646,15 @@ class DesktopTimerApp:
         else:
             self.lbl_lock_warning.pack_forget()
 
+        # Enable/disable +/- 1 min buttons (enabled during RUNNING, PAUSED, PROMPT_RESUME)
+        can_adjust = (self.controller.active_task is not None and state != EngineState.IDLE)
+        if can_adjust:
+            self.btn_minus_min.configure(state=tk.NORMAL, bg=COLOR_SURFACE, fg=COLOR_TEXT)
+            self.btn_plus_min.configure(state=tk.NORMAL, bg=COLOR_SURFACE, fg=COLOR_TEXT)
+        else:
+            self.btn_minus_min.configure(state=tk.DISABLED, bg="#1e293b", fg="#64748b")
+            self.btn_plus_min.configure(state=tk.DISABLED, bg="#1e293b", fg="#64748b")
+
         # Dynamic background color: medium gray when paused / resume is active, dark when running or idle
         is_paused = (state in (EngineState.PAUSED, EngineState.PROMPT_RESUME))
         target_bg = COLOR_BG_PAUSED if is_paused else COLOR_BG
@@ -677,6 +721,14 @@ class DesktopTimerApp:
         self._refresh_ui_state()
         if self.is_expanded:
             self._render_task_list()
+
+    def _on_click_adjust_time(self, delta_seconds: int) -> None:
+        """Adjusts active measurement time by delta_seconds (e.g. +60s or -60s)."""
+        task = self.controller.adjust_active_task_duration(delta_seconds)
+        if task:
+            self.lbl_clock.configure(text=task.formatted_duration)
+            if self.is_expanded:
+                self._render_task_list()
 
     def _on_click_new_task(self) -> None:
         """Handles New Task button click."""
@@ -765,4 +817,4 @@ class DesktopTimerApp:
         # Update UI state if state changed
         self._refresh_ui_state()
 
-        self.root.after(300, self._poll_tick)
+        self.root.after(POLL_INTERVAL_MS, self._poll_tick)
