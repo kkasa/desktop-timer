@@ -52,6 +52,7 @@ class DesktopTimerApp:
         self.controller = controller
         self.always_on_top = always_on_top
         self.is_expanded: bool = False
+        self.show_all_tasks: bool = False
         self._top_hwnd: Optional[int] = None
         self._current_task_id: Optional[str] = None
         self._current_bg: str = COLOR_BG
@@ -334,7 +335,35 @@ class DesktopTimerApp:
 
         # Divider
         self.sep = tk.Frame(self.history_frame, bg=COLOR_BORDER, height=1)
-        self.sep.pack(fill=tk.X, pady=(4, 6))
+        self.sep.pack(fill=tk.X, pady=(4, 4))
+
+        # Filter toolbar (Active only vs Show all)
+        self.history_toolbar = tk.Frame(self.history_frame, bg=COLOR_BG)
+        self.history_toolbar.pack(fill=tk.X, pady=(0, 4))
+
+        self.lbl_filter_info = tk.Label(
+            self.history_toolbar,
+            text="Active tasks",
+            bg=COLOR_BG,
+            fg=COLOR_MUTED,
+            font=("Segoe UI", 9),
+            anchor="w",
+        )
+        self.lbl_filter_info.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        self.btn_filter_toggle = tk.Button(
+            self.history_toolbar,
+            text="👁 Show All",
+            bg=COLOR_SURFACE,
+            fg=COLOR_TEXT,
+            activebackground=COLOR_SURFACE_HOVER,
+            relief=tk.FLAT,
+            font=("Segoe UI", 8, "bold"),
+            padx=7,
+            pady=1,
+            command=self._toggle_task_filter,
+        )
+        self.btn_filter_toggle.pack(side=tk.RIGHT)
 
         # Scrollable list container
         self.list_container = tk.Frame(self.history_frame, bg=COLOR_BG)
@@ -399,6 +428,8 @@ class DesktopTimerApp:
             self.task_entry_frame,
             self.controls_frame,
             self.history_frame,
+            self.history_toolbar,
+            self.lbl_filter_info,
             self.list_container,
             self.canvas,
             self.task_list_frame,
@@ -449,16 +480,39 @@ class DesktopTimerApp:
             self._adjust_window_size()
             self.btn_tasks_toggle.configure(bg=COLOR_SURFACE, fg=COLOR_TEXT)
 
+    def _toggle_task_filter(self) -> None:
+        """Toggles between showing only active unrecorded tasks and all tasks."""
+        self.show_all_tasks = not self.show_all_tasks
+        self._render_task_list()
+
     def _render_task_list(self) -> None:
         """Dynamically renders the list of previous tasks."""
         for widget in self.task_list_frame.winfo_children():
             widget.destroy()
 
         tasks = self.controller.get_all_tasks()
-        if not tasks:
+        recorded_count = sum(1 for t in tasks if t.recorded)
+        unrecorded_count = len(tasks) - recorded_count
+
+        # Filter tasks if show_all_tasks is False (default: hide recorded)
+        if self.show_all_tasks:
+            visible_tasks = tasks
+            self.btn_filter_toggle.configure(text="👁 Hide Recorded")
+            self.lbl_filter_info.configure(text=f"All tasks ({len(tasks)})")
+        else:
+            visible_tasks = [t for t in tasks if not t.recorded]
+            toggle_text = f"👁 Show All ({len(tasks)})" if recorded_count > 0 else "👁 Show All"
+            self.btn_filter_toggle.configure(text=toggle_text)
+            self.lbl_filter_info.configure(text=f"Active tasks ({unrecorded_count})")
+
+        if not visible_tasks:
+            if tasks and not self.show_all_tasks:
+                msg = f"No active tasks ({recorded_count} recorded hidden)."
+            else:
+                msg = "No recorded tasks on this desktop yet."
             lbl_empty = tk.Label(
                 self.task_list_frame,
-                text="No recorded tasks on this desktop yet.",
+                text=msg,
                 bg=self._current_bg,
                 fg=COLOR_MUTED,
                 font=("Segoe UI", 9, "italic"),
@@ -467,7 +521,7 @@ class DesktopTimerApp:
             lbl_empty.pack()
         else:
             # Most recent at top
-            for task in reversed(tasks):
+            for task in reversed(visible_tasks):
                 row_frame = tk.Frame(
                     self.task_list_frame,
                     bg=COLOR_SURFACE,

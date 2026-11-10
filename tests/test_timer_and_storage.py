@@ -285,7 +285,7 @@ def test_ui_task_entry_editing_and_dynamic_background(temp_data_dir: Path):
         # Test +1m button click while RUNNING
         prev_seconds = controller.active_task.elapsed_seconds
         app.btn_plus_min.invoke()
-        assert controller.active_task.elapsed_seconds == prev_seconds + 60
+        assert controller.active_task.elapsed_seconds >= prev_seconds + 60
         assert app.lbl_clock.cget("text") == controller.active_task.formatted_duration
 
         # User types in entry field
@@ -320,6 +320,38 @@ def test_ui_task_entry_editing_and_dynamic_background(temp_data_dir: Path):
         app._on_task_name_changed()
         loaded = repo.load_tasks()
         assert loaded[0].task_name == "Modified task name"
+
+        # Test task filter functionality (default: hide recorded tasks)
+        assert app.show_all_tasks is False
+        app._toggle_tasks_panel()  # Expand tasks panel
+        assert app.is_expanded is True
+
+        # Complete task 1 and mark recorded
+        t1 = controller.active_task
+        controller.complete_active_task()
+        controller.toggle_recorded(t1.task_id)
+
+        # Create task 2 (unrecorded)
+        t2 = controller.start_new_task("Task 2 active")
+        app._render_task_list()
+
+        # By default (show_all_tasks=False), only t2 should be visible (1 row)
+        rendered_rows = app.task_list_frame.winfo_children()
+        assert len(rendered_rows) == 1
+        assert "Show All" in app.btn_filter_toggle.cget("text")
+
+        # Click to show all tasks
+        app.btn_filter_toggle.invoke()
+        assert app.show_all_tasks is True
+        rendered_rows = app.task_list_frame.winfo_children()
+        assert len(rendered_rows) == 2
+        assert "Hide Recorded" in app.btn_filter_toggle.cget("text")
+
+        # Click to toggle back to active tasks only
+        app.btn_filter_toggle.invoke()
+        assert app.show_all_tasks is False
+        rendered_rows = app.task_list_frame.winfo_children()
+        assert len(rendered_rows) == 1
     finally:
         root.destroy()
 

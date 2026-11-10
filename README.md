@@ -21,7 +21,7 @@ Designed specifically for workflows where different Windows 11 Virtual Desktops 
 4. **Minimalist Floating Widget + Expandable History:**
    - Compact widget (~440 × 215 px): prominent high-contrast digital clock (`Consolas 28 bold`), quick `[-1m]` / `[+1m]` duration adjustments, real-time editable task name input, Start / Pause / Complete / New buttons, and `[📌 On Top / 📍 Normal]` toggle.
    - **Dynamic State Indication:** The widget automatically switches its background to medium gray (`#545c6e`) while paused (when the Resume button is active), providing instant visual differentiation from the deep dark running background while maintaining crisp legibility for white text.
-   - Expandable history panel (~440 × 520 px) via `[📋 Tasks]`: task history with `[☐ / ☑]` recorded checkmarks, unrecorded and total elapsed time summary, and quick `[📂 Open CSV]` access.
+   - Expandable history panel (~440 × 520 px) via `[📋 Tasks]`: task history with `[☐ / ☑]` recorded checkmarks, default filtering of recorded items with an instant `[👁 Show All]` / `[👁 Hide Recorded]` toggle, unrecorded and total elapsed time summary, and quick `[📂 Open CSV]` access.
 
 ---
 
